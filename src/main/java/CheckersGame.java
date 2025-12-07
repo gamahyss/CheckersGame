@@ -2,6 +2,8 @@ package main.java;
 
 import main.java.Checker;
 import main.java.Move;
+import main.java.P2PNetworkManager;
+import main.java.MoveData;
 
 import javax.swing.*;
 import java.awt.*;
@@ -9,6 +11,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.awt.Point;
 
 public class CheckersGame extends JFrame {
     private final int BOARD_SIZE = 8;
@@ -21,45 +24,292 @@ public class CheckersGame extends JFrame {
     private Checker checkerInCaptureSequence = null;
     private int whiteCheckersCount = 12;
     private int blackCheckersCount = 12;
+    private JPanel bottomPanel;
     private JLabel statusLabel;
+    private JButton restartButton;
+    private JButton networkButton;
+    private JTextArea chatArea;
+    private JTextField chatInput;
     private boolean hasMadeMove = false;
     private boolean fullScreenMode = false;
     private CheckersPanel gamePanel;
 
+    private P2PNetworkManager networkManager;
+    private boolean networkGame = false;
+    private boolean myTurn = true;
+    private boolean isWhitePlayer = true;
+    private JPanel networkPanel;
+
     public CheckersGame() {
         setTitle("Шашки");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        networkManager = new P2PNetworkManager(this);
+
+        networkPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        networkButton = new JButton("Сетевая игра");
+        networkButton.addActionListener(e -> showNetworkDialog());
+
+        JButton disconnectButton = new JButton("Отключиться");
+        disconnectButton.addActionListener(e -> disconnectNetwork());
+
+        networkPanel.add(networkButton);
+        networkPanel.add(disconnectButton);
+        add(networkPanel, BorderLayout.NORTH);
 
         gamePanel = new CheckersPanel();
-        add(gamePanel);
+        add(gamePanel, BorderLayout.CENTER);
+
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.setPreferredSize(new Dimension(250, 0));
+
+        chatArea = new JTextArea();
+        chatArea.setEditable(false);
+        chatArea.setLineWrap(true);
+        chatArea.setWrapStyleWord(true);
+        JScrollPane chatScroll = new JScrollPane(chatArea);
+        chatScroll.setPreferredSize(new Dimension(250, 600));
+
+        JPanel chatInputPanel = new JPanel(new BorderLayout());
+        chatInput = new JTextField();
+        chatInput.addActionListener(e -> sendChatMessage());
+        JButton sendButton = new JButton("Отправить");
+        sendButton.addActionListener(e -> sendChatMessage());
+
+        chatInputPanel.add(chatInput, BorderLayout.CENTER);
+        chatInputPanel.add(sendButton, BorderLayout.EAST);
+
+        rightPanel.add(new JLabel("Чат:", SwingConstants.CENTER), BorderLayout.NORTH);
+        rightPanel.add(chatScroll, BorderLayout.CENTER);
+        rightPanel.add(chatInputPanel, BorderLayout.SOUTH);
+        add(rightPanel, BorderLayout.EAST);
+
+        bottomPanel = new JPanel(new BorderLayout());
 
         statusLabel = new JLabel("Ход белых", SwingConstants.CENTER);
-        statusLabel.setPreferredSize(new Dimension(800, 30));
-        add(statusLabel, BorderLayout.SOUTH);
+        statusLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        bottomPanel.add(statusLabel, BorderLayout.CENTER);
+
+        restartButton = new JButton("Начать заново");
+        restartButton.setFont(new Font("Arial", Font.PLAIN, 12));
+        restartButton.setPreferredSize(new Dimension(120, 30));
+        restartButton.addActionListener(e -> resetGame());
+        bottomPanel.add(restartButton, BorderLayout.EAST);
+
+        add(bottomPanel, BorderLayout.SOUTH);
 
         JMenuBar menuBar = new JMenuBar();
-        JMenu gameMenu = new JMenu("");
+        JMenu gameMenu = new JMenu("Игра");
+        JMenu networkMenu = new JMenu("Сеть");
+
+        JMenuItem newGameItem = new JMenuItem("Новая игра");
         JMenuItem fullScreenItem = new JMenuItem("Полноэкранный режим");
         JMenuItem exitItem = new JMenuItem("Выход");
 
+        JMenuItem hostGameItem = new JMenuItem("Создать игру");
+        JMenuItem joinGameItem = new JMenuItem("Присоединиться");
+        JMenuItem disconnectMenuItem = new JMenuItem("Отключиться");
+
+        newGameItem.addActionListener(e -> resetGame());
         fullScreenItem.addActionListener(e -> toggleFullScreen());
         exitItem.addActionListener(e -> System.exit(0));
 
+        hostGameItem.addActionListener(e -> createNetworkGame());
+        joinGameItem.addActionListener(e -> joinNetworkGame());
+        disconnectMenuItem.addActionListener(e -> disconnectNetwork());
+
+        gameMenu.add(newGameItem);
         gameMenu.add(fullScreenItem);
         gameMenu.addSeparator();
         gameMenu.add(exitItem);
+
+        networkMenu.add(hostGameItem);
+        networkMenu.add(joinGameItem);
+        networkMenu.addSeparator();
+        networkMenu.add(disconnectMenuItem);
+
         menuBar.add(gameMenu);
+        menuBar.add(networkMenu);
         setJMenuBar(menuBar);
 
         initializeBoard();
         updateStatus();
 
-        setPreferredSize(new Dimension(800, 800));
+        setPreferredSize(new Dimension(1100, 850));
         pack();
         setLocationRelativeTo(null);
     }
 
+    private void showNetworkDialog() {
+        String[] options = {"Создать игру", "Присоединиться", "Отмена"};
+        int choice = JOptionPane.showOptionDialog(this,
+                "Выберите тип подключения:",
+                "Сетевая игра",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                options,
+                options[0]);
+
+        if (choice == 0) {
+            createNetworkGame();
+        } else if (choice == 1) {
+            joinNetworkGame();
+        }
+    }
+
+    private void createNetworkGame() {
+        if (networkManager.isConnected()) {
+            JOptionPane.showMessageDialog(this, "Уже подключены к игре");
+            return;
+        }
+
+        if (networkManager.startAsHost()) {
+            addChatMessage("Система: Игра создана. Ожидание противника...");
+        }
+    }
+
+    private void joinNetworkGame() {
+        if (networkManager.isConnected()) {
+            JOptionPane.showMessageDialog(this, "Уже подключены к игре");
+            return;
+        }
+
+        String ipAddress = JOptionPane.showInputDialog(this,
+                "Введите IP адрес хоста:", "127.0.0.1");
+
+        if (ipAddress != null && !ipAddress.trim().isEmpty()) {
+            if (networkManager.connectAsClient(ipAddress.trim())) {
+                addChatMessage("Система: Подключение к " + ipAddress);
+            }
+        }
+    }
+
+    private void disconnectNetwork() {
+        if (networkManager.isConnected()) {
+            networkManager.disconnect();
+            networkGame = false;
+            addChatMessage("Система: Отключено от сетевой игры");
+            updateStatus();
+        }
+    }
+
+    public void setNetworkConnected(boolean connected, boolean isWhite) {
+        this.networkGame = connected;
+        this.isWhitePlayer = isWhite;
+        this.myTurn = isWhite;
+
+        if (connected) {
+            addChatMessage("Система: Сетевая игра начата!");
+            addChatMessage("Система: Вы играете " + (isWhite ? "белыми" : "черными"));
+
+            if (!isWhite) {
+                statusLabel.setText("Ожидаем ход белых...");
+            }
+        }
+
+        updateStatus();
+    }
+
+    public void applyNetworkMove(MoveData moveData) {
+        if (!networkGame) return;
+
+        Checker checker = board[moveData.getFromRow()][moveData.getFromCol()];
+        if (checker == null) return;
+
+        makeMove(checker, moveData.getToCol(), moveData.getToRow(), moveData.getCaptured());
+
+        myTurn = true;
+        updateStatus();
+    }
+
+    public void makeMove(Checker checker, int newCol, int newRow, List<Point> capturedCheckers) {
+        for (Point captured : capturedCheckers) {
+            if (board[captured.y][captured.x] != null) {
+                if (board[captured.y][captured.x].getColor() == Color.WHITE) {
+                    whiteCheckersCount--;
+                } else {
+                    blackCheckersCount--;
+                }
+                board[captured.y][captured.x] = null;
+            }
+        }
+
+        board[checker.getRow()][checker.getCol()] = null;
+        checker.move(newRow, newCol);
+        board[newRow][newCol] = checker;
+
+        if (!checker.isKing()) {
+            if ((checker.getColor() == Color.WHITE && newRow == 0) ||
+                    (checker.getColor() == Color.BLACK && newRow == BOARD_SIZE - 1)) {
+                checker.setKing(true);
+            }
+        }
+
+        if (!capturedCheckers.isEmpty()) {
+            calculateValidMoves(checker);
+            if (hasCaptureMoves()) {
+                mustContinueCapture = true;
+                checkerInCaptureSequence = checker;
+                selectedChecker = checker;
+                hasMadeMove = true;
+                updateStatus();
+                repaint();
+                return;
+            }
+        }
+
+        mustContinueCapture = false;
+        checkerInCaptureSequence = null;
+        selectedChecker = null;
+        validMoves.clear();
+
+        if (!networkGame) {
+            isWhiteTurn = !isWhiteTurn;
+        }
+
+        hasMadeMove = false;
+        updateStatus();
+        repaint();
+    }
+
+    private void sendNetworkMove(Checker checker, int toCol, int toRow, List<Point> captured) {
+        if (!networkGame || !myTurn) return;
+
+        MoveData moveData = new MoveData(
+                checker.getRow(),
+                checker.getCol(),
+                toRow,
+                toCol,
+                captured
+        );
+
+        networkManager.sendMove(moveData);
+        myTurn = false;
+    }
+
+    private void sendChatMessage() {
+        String message = chatInput.getText().trim();
+        if (!message.isEmpty() && networkManager.isConnected()) {
+            networkManager.sendChatMessage(message);
+            addChatMessage("Вы: " + message);
+            chatInput.setText("");
+        }
+    }
+
+    public void receiveChatMessage(String message) {
+        addChatMessage("Противник: " + message);
+    }
+
+    private void addChatMessage(String message) {
+        chatArea.append(message + "\n");
+        chatArea.setCaretPosition(chatArea.getDocument().getLength());
+    }
+
     private void initializeBoard() {
+        board = new Checker[BOARD_SIZE][BOARD_SIZE];
+
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < BOARD_SIZE; col++) {
                 if ((row + col) % 2 == 1) {
@@ -95,39 +345,68 @@ public class CheckersGame extends JFrame {
     }
 
     private void updateStatus() {
-        String status = isWhiteTurn ? "Ход белых" : "Ход черных";
+        String status;
+
+        if (networkGame) {
+            status = "Сетевая игра | ";
+            status += "Вы: " + (isWhitePlayer ? "Белые" : "Черные") + " | ";
+            status += myTurn ? "Ваш ход" : "Ход противника";
+        } else {
+            status = isWhiteTurn ? "Ход белых" : "Ход черных";
+        }
+
         if (mustContinueCapture) {
             status += " (продолжите взятие)";
         }
+
         status += " | Белые: " + whiteCheckersCount + " | Черные: " + blackCheckersCount;
-        if (fullScreenMode) {
-            status += " | F11 - выход из полноэкранного режима";
-        }
         statusLabel.setText(status);
 
         if (whiteCheckersCount == 0) {
             JOptionPane.showMessageDialog(this, "Черные выиграли!");
-            resetGame();
+            if (networkGame) {
+                addChatMessage("Система: Черные выиграли!");
+            }
         } else if (blackCheckersCount == 0) {
             JOptionPane.showMessageDialog(this, "Белые выиграли!");
-            resetGame();
+            if (networkGame) {
+                addChatMessage("Система: Белые выиграли!");
+            }
         }
     }
 
     private void resetGame() {
-        board = new Checker[BOARD_SIZE][BOARD_SIZE];
-        whiteCheckersCount = blackCheckersCount = 12;
-        isWhiteTurn = true;
-        mustContinueCapture = false;
-        selectedChecker = null;
-        validMoves.clear();
-        hasMadeMove = false;
-        initializeBoard();
-        gamePanel.repaint();
-        updateStatus();
-    }
+        int response = JOptionPane.showConfirmDialog(this,
+                "Вы уверены, что хотите начать новую игру?",
+                "Новая игра",
+                JOptionPane.YES_NO_OPTION);
 
-    public void makeMove(Checker whiteChecker, int i, int i1, ArrayList<Object> objects) {
+        if (response == JOptionPane.YES_OPTION) {
+            board = new Checker[BOARD_SIZE][BOARD_SIZE];
+            whiteCheckersCount = blackCheckersCount = 12;
+            isWhiteTurn = true;
+            mustContinueCapture = false;
+            selectedChecker = null;
+            validMoves.clear();
+            checkerInCaptureSequence = null;
+            hasMadeMove = false;
+
+            if (networkGame) {
+                myTurn = isWhitePlayer; // Сброс очереди хода в сетевой игре
+            }
+
+            // Инициализируем новую доску
+            initializeBoard();
+
+            // Обновляем интерфейс
+            gamePanel.repaint();
+            updateStatus();
+
+            JOptionPane.showMessageDialog(this, "Новая игра начата!");
+            if (networkGame) {
+                addChatMessage("Система: Игра перезапущена!");
+            }
+        }
     }
 
     public class CheckersPanel extends JPanel {
@@ -241,52 +520,46 @@ public class CheckersGame extends JFrame {
         private class ClickListener extends MouseAdapter {
             @Override
             public void mousePressed(MouseEvent e) {
+                if (networkGame && !myTurn) {
+                    JOptionPane.showMessageDialog(CheckersGame.this,
+                            "Сейчас ход противника!");
+                    return;
+                }
+
                 Point boardPos = screenToBoard(e.getX(), e.getY());
                 if (boardPos == null) return;
 
                 int col = boardPos.x;
                 int row = boardPos.y;
 
-                if (mustContinueCapture && selectedChecker != null &&
-                        (board[row][col] == null || board[row][col] != selectedChecker)) {
+                Color currentColor = networkGame ?
+                        (isWhitePlayer ? Color.WHITE : Color.BLACK) :
+                        (isWhiteTurn ? Color.WHITE : Color.BLACK);
 
-                    for (Move move : validMoves) {
-                        if (move.toCol == col && move.toRow == row && !move.capturedCheckers.isEmpty()) {
-                            makeMove(selectedChecker, col, row, move.capturedCheckers);
-                            return;
-                        }
+                if (board[row][col] != null && board[row][col].getColor() == currentColor) {
+                    if (mustContinueCapture && selectedChecker != null && selectedChecker != board[row][col]) {
+                        return; // Нельзя выбрать другую шашку во время взятия
                     }
+
+                    selectedChecker = board[row][col];
+                    calculateValidMoves(selectedChecker);
+
+                    if (hasMandatoryCapture() && !hasCaptureMoves()) {
+                        selectedChecker = null;
+                        validMoves.clear();
+                    }
+
+                    repaint();
                     return;
                 }
 
-                if (board[row][col] != null && board[row][col].getColor() == (isWhiteTurn ? Color.WHITE : Color.BLACK)) {
-                    if (selectedChecker != null && selectedChecker != board[row][col]) {
-                        selectedChecker = board[row][col];
-                        calculateValidMoves(selectedChecker);
-
-                        if (hasMandatoryCapture() && !hasCaptureMoves()) {
-                            selectedChecker = null;
-                            validMoves.clear();
-                        }
-
-                        repaint();
-                        return;
-                    }
-
-                    if (selectedChecker == null) {
-                        selectedChecker = board[row][col];
-                        calculateValidMoves(selectedChecker);
-
-                        if (hasMandatoryCapture() && !hasCaptureMoves()) {
-                            selectedChecker = null;
-                            validMoves.clear();
-                        }
-
-                        repaint();
-                    }
-                } else if (selectedChecker != null) {
+                if (selectedChecker != null) {
                     for (Move move : validMoves) {
                         if (move.toCol == col && move.toRow == row) {
+                            if (networkGame) {
+                                // В сетевой игре отправляем ход
+                                sendNetworkMove(selectedChecker, col, row, move.capturedCheckers);
+                            }
                             makeMove(selectedChecker, col, row, move.capturedCheckers);
                             break;
                         }
@@ -357,7 +630,11 @@ public class CheckersGame extends JFrame {
                 checkerInCaptureSequence = null;
                 selectedChecker = null;
                 validMoves.clear();
-                isWhiteTurn = !isWhiteTurn;
+
+                if (!networkGame) {
+                    isWhiteTurn = !isWhiteTurn;
+                }
+
                 hasMadeMove = false;
                 updateStatus();
                 repaint();
@@ -378,7 +655,6 @@ public class CheckersGame extends JFrame {
             calculateNormalMoves(checker);
         }
 
-        // Если есть взятия, убираем простые ходы
         if (hasCaptureMoves()) {
             validMoves.removeIf(move -> move.capturedCheckers.isEmpty());
         }
@@ -390,7 +666,6 @@ public class CheckersGame extends JFrame {
         Color color = checker.getColor();
         int direction = (color == Color.WHITE) ? -1 : 1;
 
-        // Простые ходы
         if (!mustContinueCapture) {
             checkNormalMove(x - 1, y + direction, color);
             checkNormalMove(x + 1, y + direction, color);
@@ -580,4 +855,3 @@ public class CheckersGame extends JFrame {
         return copy;
     }
 }
-
