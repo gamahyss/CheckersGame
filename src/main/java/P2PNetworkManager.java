@@ -13,7 +13,7 @@ public class P2PNetworkManager {
     private boolean isHost = false;
     private boolean connected = false;
     private String peerAddress = "";
-    private int port = 12345;
+    private int port = 8002;
 
     private CheckersGame game;
     private ExecutorService executor;
