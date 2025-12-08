@@ -207,6 +207,30 @@ public class CheckersGame extends JFrame {
         updateStatus();
     }
 
+    private void showNetworkSettingsDialog() {
+        JPanel panel = new JPanel(new GridLayout(3, 2));
+
+        JTextField portField = new JTextField("8002");
+        JTextField ipField = new JTextField("127.0.0.1");
+
+        panel.add(new JLabel("Порт:"));
+        panel.add(portField);
+        panel.add(new JLabel("IP хоста:"));
+        panel.add(ipField);
+        panel.add(new JLabel("(оставьте пустым для создания игры)"));
+
+        int result = JOptionPane.showConfirmDialog(this, panel,
+                "Настройки сети", JOptionPane.OK_CANCEL_OPTION);
+
+        if (result == JOptionPane.OK_OPTION) {
+            try {
+                int port = Integer.parseInt(portField.getText());
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Неверный формат порта");
+            }
+        }
+    }
+
     public void applyNetworkMove(MoveData moveData) {
         if (!networkGame) return;
 
@@ -583,56 +607,6 @@ public class CheckersGame extends JFrame {
                     }
                 }
                 return false;
-            }
-
-            private void makeMove(Checker checker, int newCol, int newRow, List<Point> capturedCheckers) {
-                for (Point captured : capturedCheckers) {
-                    if (board[captured.y][captured.x] != null) {
-                        if (board[captured.y][captured.x].getColor() == Color.WHITE) {
-                            whiteCheckersCount--;
-                        } else {
-                            blackCheckersCount--;
-                        }
-                        board[captured.y][captured.x] = null;
-                    }
-                }
-
-                board[checker.getRow()][checker.getCol()] = null;
-                checker.move(newRow, newCol);
-                board[newRow][newCol] = checker;
-
-                if (!checker.isKing()) {
-                    if ((checker.getColor() == Color.WHITE && newRow == 0) ||
-                            (checker.getColor() == Color.BLACK && newRow == BOARD_SIZE - 1)) {
-                        checker.setKing(true);
-                    }
-                }
-
-                if (!capturedCheckers.isEmpty()) {
-                    calculateValidMoves(checker);
-                    if (hasCaptureMoves()) {
-                        mustContinueCapture = true;
-                        checkerInCaptureSequence = checker;
-                        selectedChecker = checker;
-                        hasMadeMove = true;
-                        updateStatus();
-                        repaint();
-                        return;
-                    }
-                }
-
-                mustContinueCapture = false;
-                checkerInCaptureSequence = null;
-                selectedChecker = null;
-                validMoves.clear();
-
-                if (!networkGame) {
-                    isWhiteTurn = !isWhiteTurn;
-                }
-
-                hasMadeMove = false;
-                updateStatus();
-                repaint();
             }
         }
     }

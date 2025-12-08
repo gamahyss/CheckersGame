@@ -1,3 +1,5 @@
+//НЕ ЗАБУДЬ ОТКРЫТЬ ПОРТ ВО ВРЕМЯ ДЕМОНСТРАЦИИ НА ПАРЕ
+
 package main.java;
 
 import org.springframework.boot.SpringApplication;
@@ -12,7 +14,7 @@ public class CheckersApplication {
         }).start();
 
         try {
-            Thread.sleep(2000);
+            Thread.sleep(3000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
