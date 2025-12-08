@@ -1,10 +1,5 @@
 package main.java;
 
-import main.java.Checker;
-import main.java.Move;
-import main.java.P2PNetworkManager;
-import main.java.MoveData;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -186,7 +181,7 @@ public class CheckersGame extends JFrame {
         }
     }
 
-    private void disconnectNetwork() {
+    public void disconnectNetwork() {
         if (networkManager.isConnected()) {
             networkManager.disconnect();
             networkGame = false;
@@ -302,7 +297,7 @@ public class CheckersGame extends JFrame {
         addChatMessage("Противник: " + message);
     }
 
-    private void addChatMessage(String message) {
+    public void addChatMessage(String message) {
         chatArea.append(message + "\n");
         chatArea.setCaretPosition(chatArea.getDocument().getLength());
     }
