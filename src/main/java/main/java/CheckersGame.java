@@ -196,15 +196,43 @@ public class CheckersGame extends JFrame {
         this.myTurn = isWhite;
 
         if (connected) {
+            board = new Checker[BOARD_SIZE][BOARD_SIZE];
+            whiteCheckersCount = blackCheckersCount = 12;
+            isWhiteTurn = true;
+            mustContinueCapture = false;
+            selectedChecker = null;
+            validMoves.clear();
+            checkerInCaptureSequence = null;
+            hasMadeMove = false;
+
+            initializeBoard();
+
             addChatMessage("Система: Сетевая игра начата!");
             addChatMessage("Система: Вы играете " + (isWhite ? "белыми" : "черными"));
 
             if (!isWhite) {
                 statusLabel.setText("Ожидаем ход белых...");
             }
+
+            gamePanel.repaint();
         }
 
         updateStatus();
+    }
+
+    public void applyGameState(GameState gameState) {
+        this.board = gameState.getBoard();
+        this.whiteCheckersCount = gameState.getWhiteCheckersCount();
+        this.blackCheckersCount = gameState.getBlackCheckersCount();
+        this.isWhiteTurn = gameState.isWhiteTurn();
+
+        gamePanel.repaint();
+        updateStatus();
+    }
+
+    public GameState getCurrentGameState() {
+        Checker[][] boardCopy = copyBoard();
+        return new GameState(boardCopy, whiteCheckersCount, blackCheckersCount, isWhiteTurn);
     }
 
     private void showNetworkSettingsDialog() {

@@ -50,6 +50,9 @@ public class P2PNetworkManager {
                     SwingUtilities.invokeLater(() -> {
                         JOptionPane.showMessageDialog(game, "Противник подключился!");
                         game.setNetworkConnected(true, false); // Хост играет белыми
+
+                        GameState initialState = game.getCurrentGameState();
+                        sendMessage(new NetworkMessage(NetworkMessage.MessageType.GAME_STATE, initialState));
                     });
 
                     startListening();
@@ -144,6 +147,8 @@ public class P2PNetworkManager {
                         break;
 
                     case GAME_STATE:
+                        GameState gameState = (GameState) message.getData();
+                        game.applyGameState(gameState);
                         break;
 
                     case CHAT:
@@ -193,6 +198,10 @@ public class P2PNetworkManager {
         sendMessage(new NetworkMessage(NetworkMessage.MessageType.CHAT, message));
     }
 
+    public void sendGameState(GameState gameState) {
+        sendMessage(new NetworkMessage(NetworkMessage.MessageType.GAME_STATE, gameState));
+    }
+
     public void disconnect() {
         if (!connected.getAndSet(false)) {
             return;
@@ -202,7 +211,6 @@ public class P2PNetworkManager {
             try {
                 sendMessage(new NetworkMessage(NetworkMessage.MessageType.DISCONNECT, "Отключение"));
             } catch (Exception e) {
-
             }
         }
 

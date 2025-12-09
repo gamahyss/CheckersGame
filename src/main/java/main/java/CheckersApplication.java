@@ -8,7 +8,9 @@ import javax.swing.*;
 
 @SpringBootApplication
 public class CheckersApplication {
-    public static void main(String[] args) {new Thread(() -> {
+    public static void main(String[] args) {
+        System.setProperty("java.awt.headless", "false");
+        new Thread(() -> {
             SpringApplication.run(CheckersApplication.class, args);
             System.out.println("Spring Boot сервер запущен на порту 8080");
         }).start();
