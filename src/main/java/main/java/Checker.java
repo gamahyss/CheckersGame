@@ -1,8 +1,9 @@
 package main.java;
 
 import java.awt.*;
+import java.io.Serializable;
 
-public class Checker {
+public class Checker implements Serializable {
     private Color color;
     private int row;
     private int col;
